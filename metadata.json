@@ -1,0 +1,5 @@
+{
+  "name": "Student Group Generator",
+  "description": "An application for administrators to randomly assign students into groups for various courses and for students to look up their assigned groups.",
+  "requestFramePermissions": []
+}

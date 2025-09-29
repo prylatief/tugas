@@ -1,0 +1,93 @@
+
+import type { GeneratedGroup } from '../types';
+
+const downloadCSV = (csvContent: string, filename: string) => {
+  const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const escapeCsvCell = (cell: string | undefined): string => {
+  if (cell === undefined || cell === null) {
+    return '""';
+  }
+  const str = String(cell);
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return `"${str}"`;
+};
+
+export const exportCourseToCSV = (generated: GeneratedGroup) => {
+  if (!generated) return;
+  const { course, groups } = generated;
+  const headers = ['Mata Kuliah', 'Judul Tugas', 'No. Kelompok', 'Nama', 'Email', 'Role'];
+  let csvContent = headers.join(',') + '\r\n';
+
+  groups.forEach((group, groupIndex) => {
+    group.members.forEach(member => {
+      const row = [
+        course.name,
+        group.assignmentTitle,
+        groupIndex + 1,
+        member.student.name,
+        member.student.email || '',
+        member.role
+      ].map(escapeCsvCell);
+      csvContent += row.join(',') + '\r\n';
+    });
+  });
+
+  const filename = `kelompok-${course.name.replace(/ /g, '_')}.csv`;
+  downloadCSV(csvContent, filename);
+};
+
+
+export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
+  if (!allGenerated || allGenerated.length === 0) return;
+
+  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Kelompok', 'Role'];
+  let csvContent = headers.join(',') + '\r\n';
+
+  const studentMap = new Map<string, { student: any; assignments: any[] }>();
+
+  allGenerated.forEach(generated => {
+    generated.groups.forEach((group, groupIndex) => {
+      group.members.forEach(member => {
+        const studentKey = member.student.email || member.student.name;
+        if (!studentMap.has(studentKey)) {
+          studentMap.set(studentKey, { student: member.student, assignments: [] });
+        }
+        studentMap.get(studentKey)?.assignments.push({
+          courseName: generated.course.name,
+          assignmentTitle: group.assignmentTitle,
+          groupNumber: groupIndex + 1,
+          role: member.role,
+        });
+      });
+    });
+  });
+
+  studentMap.forEach(({ student, assignments }) => {
+    assignments.forEach(assignment => {
+       const row = [
+          student.name,
+          student.email || '',
+          assignment.courseName,
+          assignment.assignmentTitle,
+          assignment.groupNumber,
+          assignment.role,
+       ].map(escapeCsvCell);
+       csvContent += row.join(',') + '\r\n';
+    });
+  });
+
+  const filename = `rekap_semua_mahasiswa.csv`;
+  downloadCSV(csvContent, filename);
+};
