@@ -1,10 +1,10 @@
-
-import React, { useState, useCallback, useMemo } from 'react';
-import type { Student, Course, GeneratedGroup } from './types';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import type { Student, Course, GeneratedGroup, Group } from './types';
 import LoginForm from './components/LoginForm';
 import AdminPanel from './components/AdminPanel';
 import StudentView from './components/StudentView';
 import { CloseIcon } from './components/Icons';
+import { supabase } from './supabase';
 
 const PREPOPULATED_STUDENTS_STRING = `ACHMAD ALI RIDHO,1924250001
 AHMAD DZIKRI,1924250002
@@ -71,15 +71,79 @@ const parseStudents = (text: string): Student[] => {
     });
 };
 
+const useDebounce = (value: string, delay: number) => {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            setDebouncedValue(value);
+        }, delay);
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [value, delay]);
+    return debouncedValue;
+};
+
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [studentsString, setStudentsString] = useState(PREPOPULATED_STUDENTS_STRING);
+  const [loading, setLoading] = useState(true);
+
+  const [studentsString, setStudentsString] = useState('');
   const [courses, setCourses] = useState<Course[]>([]);
   const [generatedData, setGeneratedData] = useState<GeneratedGroup[]>([]);
   
+  const debouncedStudentsString = useDebounce(studentsString, 1000);
   const students = useMemo(() => parseStudents(studentsString), [studentsString]);
+
+  // Fetch initial data
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+
+      // Fetch students
+      const { data: studentData, error: studentError } = await supabase
+        .from('students')
+        .select('content')
+        .eq('id', 1)
+        .single();
+
+      if (studentData?.content) {
+        setStudentsString(studentData.content);
+      } else {
+        // If no student data, populate with default and save
+        setStudentsString(PREPOPULATED_STUDENTS_STRING);
+        await supabase.from('students').upsert({ id: 1, content: PREPOPULATED_STUDENTS_STRING });
+      }
+
+      // Fetch course groups
+      const { data: groupData, error: groupError } = await supabase.from('course_groups').select('*');
+
+      if (groupData) {
+        const reconstructedCourses: Course[] = groupData.map(d => d.course_data);
+        const reconstructedGeneratedData: GeneratedGroup[] = groupData.map(d => ({
+          course: d.course_data,
+          groups: d.groups_data || [],
+        }));
+        setCourses(reconstructedCourses);
+        setGeneratedData(reconstructedGeneratedData);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  // Save student string to DB on change (debounced)
+  useEffect(() => {
+    if (debouncedStudentsString) {
+        const updateStudents = async () => {
+            await supabase.from('students').update({ content: debouncedStudentsString }).eq('id', 1);
+        };
+        updateStudents();
+    }
+  }, [debouncedStudentsString]);
+
 
   const handleLoginSuccess = () => {
     setIsLoggedIn(true);
@@ -92,30 +156,93 @@ function App() {
     }
   }, []);
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback(async () => {
     if(window.confirm("Apakah Anda yakin ingin mereset semua data? Aksi ini tidak dapat diurungkan.")){
+        setLoading(true);
+        // Delete all courses from DB
+        const { data: coursesToDelete } = await supabase.from('course_groups').select('id');
+        if (coursesToDelete) {
+          const ids = coursesToDelete.map(c => c.id);
+          await supabase.from('course_groups').delete().in('id', ids);
+        }
+        
+        // Reset students string in DB
+        await supabase.from('students').update({ content: PREPOPULATED_STUDENTS_STRING }).eq('id', 1);
+
+        // Reset local state
         setStudentsString(PREPOPULATED_STUDENTS_STRING);
         setCourses([]);
         setGeneratedData([]);
+        setLoading(false);
     }
   }, []);
   
-  const addCourse = () => {
+  const addCourse = async () => {
     const newCourse = { id: Date.now().toString(), name: '' };
-    setCourses(prev => [...prev, newCourse]);
-    setGeneratedData(prev => [...prev, { course: newCourse, groups: [] }]);
+    
+    // Add to DB
+    const { error } = await supabase.from('course_groups').insert({
+        id: newCourse.id,
+        course_data: newCourse,
+        groups_data: []
+    });
+
+    if(!error) {
+       // Add to local state
+        setCourses(prev => [...prev, newCourse]);
+        setGeneratedData(prev => [...prev, { course: newCourse, groups: [] }]);
+    }
   };
 
-  const removeCourse = (id: string) => {
-    setCourses(prev => prev.filter(course => course.id !== id));
-    setGeneratedData(prev => prev.filter(data => data.course.id !== id));
+  const removeCourse = async (id: string) => {
+    // Remove from DB
+    const { error } = await supabase.from('course_groups').delete().eq('id', id);
+
+    if(!error) {
+      // Remove from local state
+      setCourses(prev => prev.filter(course => course.id !== id));
+      setGeneratedData(prev => prev.filter(data => data.course.id !== id));
+    }
   };
 
-  const handleCourseChange = (id: string, field: keyof Omit<Course, 'id'>, value: string) => {
-    setCourses(prev => prev.map(course => (course.id === id ? { ...course, [field]: value } : course)));
-    setGeneratedData(prev => prev.map(data => (data.course.id === id ? { ...data, course: { ...data.course, [field]: value } } : data)));
+  const handleCourseChange = async (id: string, field: keyof Omit<Course, 'id'>, value: string) => {
+    const updatedCourses = courses.map(course => (course.id === id ? { ...course, [field]: value } : course));
+    const updatedCourse = updatedCourses.find(c => c.id === id);
+
+    if (updatedCourse) {
+        // Update DB
+        const { error } = await supabase.from('course_groups').update({ course_data: updatedCourse }).eq('id', id);
+
+        if (!error) {
+            // Update local state
+            setCourses(updatedCourses);
+            setGeneratedData(prev => prev.map(data => (data.course.id === id ? { ...data, course: updatedCourse } : data)));
+        }
+    }
   };
 
+  const updateGeneratedData = async (courseId: string, updatedGroups: Group[]) => {
+      // Update DB
+      const { error } = await supabase.from('course_groups').update({ groups_data: updatedGroups }).eq('id', courseId);
+      
+      if (!error) {
+          // Update local state
+          setGeneratedData(prev => prev.map(data => 
+              data.course.id === courseId 
+              ? { ...data, groups: updatedGroups } 
+              : data
+          ));
+      }
+  };
+
+
+  if (loading) {
+    return (
+        <div className="flex items-center justify-center min-h-screen">
+            <div className="text-xl font-semibold">Memuat data...</div>
+        </div>
+    )
+  }
 
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
@@ -142,12 +269,12 @@ function App() {
               students={students}
               courses={courses}
               generatedData={generatedData}
-              setGeneratedData={setGeneratedData}
               handleReset={handleReset}
               handleLogout={handleLogout}
               addCourse={addCourse}
               removeCourse={removeCourse}
               handleCourseChange={handleCourseChange}
+              updateGeneratedData={updateGeneratedData}
             />
           </div>
         )}

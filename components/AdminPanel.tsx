@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { Student, Course, GeneratedGroup, Member, Group } from '../types';
 import { PlusIcon, TrashIcon, ResetIcon, DownloadIcon, LogoutIcon } from './Icons';
@@ -6,37 +5,37 @@ import { exportCourseToCSV, exportAllToCSV } from '../services/csvExporter';
 
 interface AdminPanelProps {
   studentsString: string;
-  setStudentsString: React.Dispatch<React.SetStateAction<string>>;
+  setStudentsString: (value: string) => void;
   students: Student[];
   courses: Course[];
   generatedData: GeneratedGroup[];
-  setGeneratedData: React.Dispatch<React.SetStateAction<GeneratedGroup[]>>;
   handleReset: () => void;
   handleLogout: () => void;
-  addCourse: () => void;
-  removeCourse: (id: string) => void;
-  handleCourseChange: (id: string, field: keyof Omit<Course, 'id'>, value: string) => void;
+  addCourse: () => Promise<void>;
+  removeCourse: (id: string) => Promise<void>;
+  handleCourseChange: (id: string, field: keyof Omit<Course, 'id'>, value: string) => Promise<void>;
+  updateGeneratedData: (courseId: string, updatedGroups: Group[]) => Promise<void>;
 }
 
 const MemberAdder: React.FC<{
-    courseIndex: number;
+    courseId: string;
     groupIndex: number;
     students: Student[];
-    setGeneratedData: React.Dispatch<React.SetStateAction<GeneratedGroup[]>>;
-}> = ({ courseIndex, groupIndex, students, setGeneratedData }) => {
+    groups: Group[];
+    updateGeneratedData: (courseId: string, updatedGroups: Group[]) => Promise<void>;
+}> = ({ courseId, groupIndex, students, groups, updateGeneratedData }) => {
     const [selectedStudentName, setSelectedStudentName] = useState('');
 
-    const addMember = () => {
+    const addMember = async () => {
         if (!selectedStudentName) return;
         const studentToAdd = students.find(s => s.name === selectedStudentName);
         if (!studentToAdd) return;
 
-        setGeneratedData(prevData => {
-            const newData = [...prevData];
-            const newMember: Member = { student: studentToAdd, role: 'Anggota' };
-            newData[courseIndex].groups[groupIndex].members.push(newMember);
-            return newData;
-        });
+        const updatedGroups = [...groups];
+        const newMember: Member = { student: studentToAdd, role: 'Anggota' };
+        updatedGroups[groupIndex].members.push(newMember);
+
+        await updateGeneratedData(courseId, updatedGroups);
         setSelectedStudentName('');
     };
 
@@ -67,79 +66,55 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   students,
   courses,
   generatedData,
-  setGeneratedData,
   handleReset,
   handleLogout,
   addCourse,
   removeCourse,
   handleCourseChange,
+  updateGeneratedData,
 }) => {
 
-  const handleRoleChange = (courseIndex: number, groupIndex: number, memberIndex: number, newRole: string) => {
-      setGeneratedData(prevData =>
-        prevData.map((courseData, cIdx) =>
-          cIdx !== courseIndex
-            ? courseData
+  const handleRoleChange = (courseId: string, groups: Group[], groupIndex: number, memberIndex: number, newRole: string) => {
+      const updatedGroups = groups.map((group, gIdx) =>
+          gIdx !== groupIndex
+            ? group
             : {
-                ...courseData,
-                groups: courseData.groups.map((group, gIdx) =>
-                  gIdx !== groupIndex
-                    ? group
-                    : {
-                        ...group,
-                        members: group.members.map((member, mIdx) =>
-                            mIdx !== memberIndex
-                            ? member
-                            : { ...member, role: newRole }
-                        )
-                      }
-                ),
+                ...group,
+                members: group.members.map((member, mIdx) =>
+                    mIdx !== memberIndex
+                    ? member
+                    : { ...member, role: newRole }
+                )
               }
-        )
       );
+      updateGeneratedData(courseId, updatedGroups);
   };
   
-    const handleGroupTitleChange = (courseIndex: number, groupIndex: number, newTitle: string) => {
-         setGeneratedData(prevData =>
-            prevData.map((courseData, cIdx) =>
-              cIdx !== courseIndex
-                ? courseData
-                : {
-                    ...courseData,
-                    groups: courseData.groups.map((group, gIdx) =>
-                      gIdx !== groupIndex
-                        ? group
-                        : { ...group, assignmentTitle: newTitle }
-                    ),
-                  }
-            )
-         );
-    };
-
-  const addGroup = (courseIndex: number) => {
-    setGeneratedData(prevData => {
-        const newData = [...prevData];
-        const newGroup: Group = { id: Date.now().toString(), assignmentTitle: '', members: [] };
-        newData[courseIndex].groups.push(newGroup);
-        return newData;
-    });
+  const handleGroupTitleChange = (courseId: string, groups: Group[], groupIndex: number, newTitle: string) => {
+      const updatedGroups = groups.map((group, gIdx) =>
+          gIdx !== groupIndex
+            ? group
+            : { ...group, assignmentTitle: newTitle }
+      );
+      updateGeneratedData(courseId, updatedGroups);
   };
 
-  const removeGroup = (courseIndex: number, groupIndex: number) => {
+  const addGroup = (courseId: string, groups: Group[]) => {
+    const newGroup: Group = { id: Date.now().toString(), assignmentTitle: '', members: [] };
+    const updatedGroups = [...groups, newGroup];
+    updateGeneratedData(courseId, updatedGroups);
+  };
+
+  const removeGroup = (courseId: string, groups: Group[], groupIndex: number) => {
       if (!window.confirm(`Yakin ingin menghapus Kelompok ${groupIndex + 1}?`)) return;
-      setGeneratedData(prevData => {
-          const newData = [...prevData];
-          newData[courseIndex].groups.splice(groupIndex, 1);
-          return newData;
-      });
+      const updatedGroups = groups.filter((_, idx) => idx !== groupIndex);
+      updateGeneratedData(courseId, updatedGroups);
   };
   
-  const removeMember = (courseIndex: number, groupIndex: number, memberIndex: number) => {
-       setGeneratedData(prevData => {
-          const newData = [...prevData];
-          newData[courseIndex].groups[groupIndex].members.splice(memberIndex, 1);
-          return newData;
-      });
+  const removeMember = (courseId: string, groups: Group[], groupIndex: number, memberIndex: number) => {
+       const updatedGroups = [...groups];
+       updatedGroups[groupIndex].members.splice(memberIndex, 1);
+       updateGeneratedData(courseId, updatedGroups);
   }
 
 
@@ -162,7 +137,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         {/* Student Input */}
         <div className="mb-6">
           <label className="block text-xl font-semibold text-gray-700 dark:text-gray-200 mb-2">Daftar Mahasiswa</label>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Daftar mahasiswa dimuat otomatis. Anda dapat mengedit jika diperlukan. Format: `Nama,NIM`.</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Daftar mahasiswa disimpan otomatis. Format: `Nama,NIM`.</p>
           <textarea
             className="w-full h-40 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 transition"
             value={studentsString}
@@ -212,7 +187,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
             </div>
             <div className="space-y-6">
-              {generatedData.map((data, courseIndex) => {
+              {generatedData.map((data) => {
                 if (!courses.find(c => c.id === data.course.id)) return null;
 
                 const assignedStudentNames = new Set(data.groups.flatMap(g => g.members).map(m => m.student.name));
@@ -222,7 +197,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div key={data.course.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div className="flex justify-between items-center mb-3">
                       <h4 className="text-xl font-semibold">{data.course.name}</h4>
-                      <button onClick={() => addGroup(courseIndex)} className="flex items-center px-3 py-1 bg-gray-200 dark:bg-gray-600 text-sm rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">
+                      <button onClick={() => addGroup(data.course.id, data.groups)} className="flex items-center px-3 py-1 bg-gray-200 dark:bg-gray-600 text-sm rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">
                           <PlusIcon/> Kelompok
                       </button>
                   </div>
@@ -231,7 +206,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div key={group.id} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                         <div className="flex justify-between items-center mb-2">
                           <h5 className="font-bold">Kelompok {groupIndex + 1}</h5>
-                          <button onClick={() => removeGroup(courseIndex, groupIndex)} className="text-red-500 hover:text-red-700 text-xs">
+                          <button onClick={() => removeGroup(data.course.id, data.groups, groupIndex)} className="text-red-500 hover:text-red-700 text-xs">
                               <TrashIcon/>
                           </button>
                         </div>
@@ -239,7 +214,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                             type="text"
                             placeholder="Judul Tugas Kelompok"
                             value={group.assignmentTitle}
-                            onChange={(e) => handleGroupTitleChange(courseIndex, groupIndex, e.target.value)}
+                            onChange={(e) => handleGroupTitleChange(data.course.id, data.groups, groupIndex, e.target.value)}
                             className="w-full p-1.5 mb-3 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
                         />
                         <ul className="space-y-2 mb-3">
@@ -249,16 +224,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                               <input
                                 type="text"
                                 value={member.role}
-                                onChange={(e) => handleRoleChange(courseIndex, groupIndex, memberIndex, e.target.value)}
+                                onChange={(e) => handleRoleChange(data.course.id, data.groups, groupIndex, memberIndex, e.target.value)}
                                 className="p-1 w-24 text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
                               />
-                              <button onClick={() => removeMember(courseIndex, groupIndex, memberIndex)} className="text-gray-400 hover:text-red-500">
+                              <button onClick={() => removeMember(data.course.id, data.groups, groupIndex, memberIndex)} className="text-gray-400 hover:text-red-500">
                                   &#x2715;
                               </button>
                             </li>
                           ))}
                         </ul>
-                        <MemberAdder courseIndex={courseIndex} groupIndex={groupIndex} students={availableStudents} setGeneratedData={setGeneratedData} />
+                        <MemberAdder courseId={data.course.id} groupIndex={groupIndex} students={availableStudents} groups={data.groups} updateGeneratedData={updateGeneratedData} />
                       </div>
                     ))}
                   </div>
