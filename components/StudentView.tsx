@@ -16,23 +16,110 @@ interface SearchResult {
   presentationTime?: string;
 }
 
+interface UpcomingPresentation {
+    date: string;
+    courseName: string;
+    assignmentTitle: string;
+    groupNumber: number;
+    groupMembers: Member[];
+}
+
 const formatDisplayDate = (dateString?: string): string => {
     if (!dateString) return 'Belum diatur';
     try {
         const date = new Date(dateString);
-        if (isNaN(date.getTime())) return dateString; // Fallback
+        // Adjust for timezone offset to prevent date from shifting
+        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+        const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+
+        if (isNaN(adjustedDate.getTime())) return dateString; // Fallback
 
         const dateOptions: Intl.DateTimeFormatOptions = {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric',
-            timeZone: 'UTC' // Use UTC to prevent timezone shifts
+            timeZone: 'UTC'
         };
-        return new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
+        return new Intl.DateTimeFormat('id-ID', dateOptions).format(adjustedDate);
     } catch (e) {
         return dateString; // Fallback
     }
+};
+
+const UpcomingPresentations: React.FC<{ generatedData: GeneratedGroup[] }> = ({ generatedData }) => {
+    const groupedPresentations = useMemo(() => {
+        const allPresentations: UpcomingPresentation[] = [];
+        const now = new Date();
+        const sevenDaysFromNow = new Date();
+        sevenDaysFromNow.setDate(now.getDate() + 7);
+        now.setHours(0, 0, 0, 0); // Start of today
+
+        generatedData.forEach(courseData => {
+            courseData.groups.forEach((group, index) => {
+                if (group.presentationTime) {
+                    const presentationDate = new Date(group.presentationTime);
+                    if (!isNaN(presentationDate.getTime()) && presentationDate >= now && presentationDate <= sevenDaysFromNow) {
+                        allPresentations.push({
+                            date: group.presentationTime,
+                            courseName: courseData.course.name,
+                            assignmentTitle: group.assignmentTitle,
+                            groupNumber: index + 1,
+                            groupMembers: group.members,
+                        });
+                    }
+                }
+            });
+        });
+        
+        allPresentations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const groups: { [key: string]: UpcomingPresentation[] } = {};
+        allPresentations.forEach(p => {
+            const dateKey = formatDisplayDate(p.date);
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
+            }
+            groups[dateKey].push(p);
+        });
+        return groups;
+    }, [generatedData]);
+
+    if (Object.keys(groupedPresentations).length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="mb-8">
+            <h2 className="text-2xl font-bold text-center text-primary-600 dark:text-primary-400 mb-4">
+                Jadwal Presentasi Terdekat
+            </h2>
+            <div className="max-h-96 overflow-y-auto pr-2 -mr-2 rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4 border dark:border-gray-700 relative">
+                {Object.keys(groupedPresentations).length > 0 ? (
+                    <div className="space-y-6">
+                        {Object.entries(groupedPresentations).map(([date, presentations]) => (
+                            <div key={date}>
+                                <h3 className="font-bold text-lg text-primary-600 dark:text-primary-300 mb-3 sticky top-0 bg-gray-50 dark:bg-gray-900/50 py-2 -mx-4 px-4 border-b dark:border-gray-700 z-10">{date}</h3>
+                                <div className="space-y-3">
+                                    {presentations.map((p, index) => (
+                                        <div key={`${p.courseName}-${p.groupNumber}-${index}`} className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow">
+                                             <p className="font-semibold">{p.courseName} - Kelompok {p.groupNumber}</p>
+                                             <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">"{p.assignmentTitle}"</p>
+                                             <ul className="text-sm list-disc list-inside text-gray-600 dark:text-gray-300">
+                                                {p.groupMembers.map(m => <li key={m.student.name}>{m.student.name}</li>)}
+                                             </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-center text-gray-500 py-4">Tidak ada jadwal presentasi dalam waktu dekat.</p>
+                )}
+            </div>
+        </div>
+    );
 };
 
 
@@ -72,6 +159,8 @@ const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
 
   return (
     <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-2xl w-full h-full flex flex-col">
+       <UpcomingPresentations generatedData={generatedData} />
+
       <h2 className="text-3xl font-bold text-center text-primary-600 dark:text-primary-400 mb-2">
         Cari Kelompok Anda
       </h2>
