@@ -1,7 +1,71 @@
 import React, { useState } from 'react';
 import type { Student, Course, GeneratedGroup, Member, Group } from '../types';
-import { PlusIcon, TrashIcon, ResetIcon, DownloadIcon, LogoutIcon, SortIcon } from './Icons';
+import { PlusIcon, TrashIcon, ResetIcon, DownloadIcon, LogoutIcon, SortIcon, GenerateIcon } from './Icons';
 import { exportCourseToCSV, exportAllToCSV } from '../services/csvExporter';
+import { parseAndGenerateGroups } from '../services/groupGenerator';
+
+const GroupGeneratorModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    courses: Course[];
+    onGenerate: (text: string, courseId: string) => void;
+}> = ({ isOpen, onClose, courses, onGenerate }) => {
+    if (!isOpen) return null;
+
+    const [text, setText] = useState('');
+    const [targetCourseId, setTargetCourseId] = useState('');
+
+    const handleSubmit = () => {
+        if (!targetCourseId) {
+            alert('Silakan pilih mata kuliah tujuan.');
+            return;
+        }
+        if (!text.trim()) {
+            alert('Silakan masukkan teks pembagian kelompok.');
+            return;
+        }
+        onGenerate(text, targetCourseId);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 transition-opacity duration-300">
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-2xl transform transition-all">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Generate Kelompok dari Teks</h3>
+                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white text-2xl font-bold">&times;</button>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Tempel teks pembagian kelompok. Pastikan formatnya benar: Judul tugas di baris pertama, diikuti nama anggota di baris-baris berikutnya. Pisahkan setiap kelompok dengan baris kosong.
+                </p>
+                <div className="mb-4">
+                    <label htmlFor="course-select" className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">Pilih Mata Kuliah Tujuan</label>
+                    <select
+                        id="course-select"
+                        value={targetCourseId}
+                        onChange={e => setTargetCourseId(e.target.value)}
+                        className="w-full p-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    >
+                        <option value="">-- Pilih Mata Kuliah --</option>
+                        {courses.map(course => (
+                            <option key={course.id} value={course.id}>{course.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <textarea
+                    className="w-full h-64 p-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 transition"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder="Contoh:&#10;- Materi 1 : Judul Tugas Pertama&#10;Nama Mahasiswa A&#10;Nama Mahasiswa B&#10;&#10;- Materi 2 : Judul Tugas Kedua&#10;Nama Mahasiswa C&#10;..."
+                />
+                <div className="flex justify-end gap-3 mt-4">
+                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">Batal</button>
+                    <button onClick={handleSubmit} className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition" disabled={!targetCourseId || !text.trim()}>Generate</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 interface AdminPanelProps {
   studentsString: string;
@@ -49,7 +113,6 @@ const MemberAdder: React.FC<{
         setSelectedStudentName(''); // Reset selection after adding
     };
 
-    // Partition students into available and already assigned for better UX
     const availableStudents = students.filter(s => !assignedStudentNames.has(s.name));
     const assignedStudents = students.filter(s => assignedStudentNames.has(s.name));
 
@@ -107,6 +170,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   handleCourseChange,
   updateGeneratedData,
 }) => {
+  const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState(false);
+
+  const handleGenerateFromText = (text: string, courseId: string) => {
+    const { newGroups, notFoundNames } = parseAndGenerateGroups(text, students);
+
+    if (notFoundNames.length > 0) {
+        alert(`Peringatan: Mahasiswa berikut tidak ditemukan dan dilewati:\n\n- ${notFoundNames.join('\n- ')}\n\nSilakan periksa ejaan nama di Daftar Mahasiswa.`);
+    }
+
+    if (newGroups.length === 0) {
+        alert("Tidak ada kelompok valid yang bisa dibuat dari teks yang diberikan. Periksa format Anda.");
+        return;
+    }
+
+    const courseName = courses.find(c => c.id === courseId)?.name || 'Mata Kuliah';
+    
+    if (window.confirm(`Anda akan membuat ${newGroups.length} kelompok untuk mata kuliah "${courseName}". Ini akan MENGGANTI semua kelompok yang sudah ada. Lanjutkan?`)) {
+        updateGeneratedData(courseId, newGroups);
+        setIsGeneratorModalOpen(false);
+        alert('Kelompok berhasil dibuat!');
+    }
+  };
 
   const handleRoleChange = (courseId: string, groups: Group[], groupIndex: number, memberIndex: number, newRole: string) => {
       const updatedGroups = groups.map((group, gIdx) =>
@@ -172,7 +257,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           const timeB = parsePresentationTime(b.presentationTime);
 
           if (!timeA && !timeB) return 0;
-          if (!timeA) return 1; // Groups without a valid time go to the end
+          if (!timeA) return 1;
           if (!timeB) return -1;
 
           return timeA.getTime() - timeB.getTime();
@@ -197,7 +282,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
         
-        {/* Student Input */}
         <div className="mb-6">
           <label className="block text-xl font-semibold text-gray-700 dark:text-gray-200 mb-2">Daftar Mahasiswa</label>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">Daftar mahasiswa disimpan otomatis. Format: `Nama,NIM`.</p>
@@ -209,9 +293,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       </div>
       
-      {/* Scrollable Content */}
       <div className="flex-grow overflow-y-auto -mr-4 pr-4">
-        {/* Course Management */}
         <div className="mb-6">
           <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-3">Daftar Mata Kuliah</h3>
           <div className="space-y-4">
@@ -243,10 +325,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           </button>
         </div>
 
-        {/* Group Editor */}
         {generatedData.length > 0 && (
           <div>
-            <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Pengaturan Kelompok</h3>
+             <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4 flex justify-between items-center">
+                <span>Pengaturan Kelompok</span>
+                <button 
+                  onClick={() => setIsGeneratorModalOpen(true)} 
+                  className="flex items-center text-sm px-3 py-1.5 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full hover:bg-green-200 dark:hover:bg-green-800 transition"
+                >
+                  <GenerateIcon /> Generate Otomatis
+                </button>
+              </h3>
             <div className="flex flex-wrap gap-2 mb-4">
               {generatedData.map((data) => (
                   <button key={data.course.id} onClick={() => exportCourseToCSV(data)} className="flex items-center text-sm px-3 py-1.5 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition">
@@ -331,6 +420,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         )}
       </div>
+      <GroupGeneratorModal
+          isOpen={isGeneratorModalOpen}
+          onClose={() => setIsGeneratorModalOpen(false)}
+          courses={courses}
+          onGenerate={handleGenerateFromText}
+      />
     </div>
   );
 };
