@@ -27,39 +27,72 @@ interface UpcomingPresentation {
 const formatDisplayDate = (dateString?: string): string => {
     if (!dateString) return 'Belum diatur';
     try {
-        const date = new Date(dateString);
-        // Adjust for timezone offset to prevent date from shifting
-        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-        const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+        // Input is 'YYYY-MM-DD'. To avoid timezone issues where `new Date()` might
+        // interpret this as UTC midnight (and thus roll back a day in some timezones),
+        // we parse the components manually to construct a local date.
+        const parts = dateString.split('-');
+        if (parts.length !== 3) return dateString;
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed in JS
+        const day = parseInt(parts[2], 10);
+        
+        const date = new Date(year, month, day);
 
-        if (isNaN(adjustedDate.getTime())) return dateString; // Fallback
+        if (isNaN(date.getTime())) return dateString; // Fallback
 
         const dateOptions: Intl.DateTimeFormatOptions = {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric',
-            timeZone: 'UTC'
         };
-        return new Intl.DateTimeFormat('id-ID', dateOptions).format(adjustedDate);
+        return new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
     } catch (e) {
         return dateString; // Fallback
     }
 };
 
+type FilterRange = 'today' | '3days' | '7days' | 'all';
+
 const UpcomingPresentations: React.FC<{ generatedData: GeneratedGroup[] }> = ({ generatedData }) => {
+    const [filterRange, setFilterRange] = useState<FilterRange>('7days');
+
     const groupedPresentations = useMemo(() => {
-        const allPresentations: UpcomingPresentation[] = [];
         const now = new Date();
-        const sevenDaysFromNow = new Date();
-        sevenDaysFromNow.setDate(now.getDate() + 7);
         now.setHours(0, 0, 0, 0); // Start of today
+
+        let endDate: Date | null = new Date(now);
+
+        switch (filterRange) {
+            case 'today':
+                endDate.setHours(23, 59, 59, 999);
+                break;
+            case '3days':
+                endDate.setDate(now.getDate() + 3);
+                endDate.setHours(23, 59, 59, 999);
+                break;
+            case '7days':
+                endDate.setDate(now.getDate() + 7);
+                endDate.setHours(23, 59, 59, 999);
+                break;
+            case 'all':
+                endDate = null; // No upper date limit
+                break;
+        }
+
+        const allPresentations: UpcomingPresentation[] = [];
 
         generatedData.forEach(courseData => {
             courseData.groups.forEach((group, index) => {
                 if (group.presentationTime) {
-                    const presentationDate = new Date(group.presentationTime);
-                    if (!isNaN(presentationDate.getTime()) && presentationDate >= now && presentationDate <= sevenDaysFromNow) {
+                    const parts = group.presentationTime.split('-');
+                    if (parts.length !== 3) return;
+                    const presentationDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                    
+                    const isUpcoming = presentationDate >= now;
+                    const isInRange = endDate ? presentationDate <= endDate : true;
+
+                    if (!isNaN(presentationDate.getTime()) && isUpcoming && isInRange) {
                         allPresentations.push({
                             date: group.presentationTime,
                             courseName: courseData.course.name,
@@ -83,19 +116,45 @@ const UpcomingPresentations: React.FC<{ generatedData: GeneratedGroup[] }> = ({ 
             groups[dateKey].push(p);
         });
         return groups;
-    }, [generatedData]);
-
-    if (Object.keys(groupedPresentations).length === 0) {
-        return null;
-    }
+    }, [generatedData, filterRange]);
+    
+    const filterOptions: { key: FilterRange; label: string }[] = [
+        { key: 'today', label: 'Hari Ini' },
+        { key: '3days', label: '3 Hari' },
+        { key: '7days', label: 'Minggu Ini' },
+        { key: 'all', label: 'Semua' },
+    ];
 
     return (
         <div className="mb-8">
             <h2 className="text-2xl font-bold text-center text-primary-600 dark:text-primary-400 mb-4">
                 Jadwal Presentasi Terdekat
             </h2>
-            <div className="max-h-96 overflow-y-auto pr-2 -mr-2 rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4 border dark:border-gray-700 relative">
-                {Object.keys(groupedPresentations).length > 0 ? (
+            
+            <div className="flex justify-center mb-4">
+                <div className="inline-flex rounded-lg shadow-sm bg-gray-100 dark:bg-gray-900 p-1">
+                    {filterOptions.map(opt => (
+                        <button
+                            key={opt.key}
+                            onClick={() => setFilterRange(opt.key)}
+                            className={`px-3 py-1 text-sm font-semibold rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-opacity-50
+                                ${filterRange === opt.key 
+                                    ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-300 shadow' 
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800'}`
+                                }
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {Object.keys(groupedPresentations).length === 0 ? (
+                <div className="text-center text-gray-500 py-4 bg-gray-50 dark:bg-gray-900/50 p-4 border dark:border-gray-700 rounded-lg">
+                    <p>Tidak ada jadwal presentasi pada rentang waktu ini.</p>
+                </div>
+            ) : (
+                <div className="max-h-96 overflow-y-auto pr-2 -mr-2 rounded-lg bg-gray-50 dark:bg-gray-900/50 p-4 border dark:border-gray-700 relative">
                     <div className="space-y-6">
                         {Object.entries(groupedPresentations).map(([date, presentations]) => (
                             <div key={date}>
@@ -114,10 +173,8 @@ const UpcomingPresentations: React.FC<{ generatedData: GeneratedGroup[] }> = ({ 
                             </div>
                         ))}
                     </div>
-                ) : (
-                    <p className="text-center text-gray-500 py-4">Tidak ada jadwal presentasi dalam waktu dekat.</p>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 };

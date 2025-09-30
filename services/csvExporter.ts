@@ -26,7 +26,13 @@ const escapeCsvCell = (cell: string | undefined): string => {
 const formatDisplayDate = (dateString?: string): string => {
     if (!dateString) return '';
     try {
-        const date = new Date(dateString);
+        const parts = dateString.split('-');
+        if (parts.length !== 3) return dateString;
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed in JS
+        const day = parseInt(parts[2], 10);
+
+        const date = new Date(year, month, day);
         if (isNaN(date.getTime())) return dateString;
 
         const dateOptions: Intl.DateTimeFormatOptions = {
@@ -34,7 +40,6 @@ const formatDisplayDate = (dateString?: string): string => {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
-            timeZone: 'UTC'
         };
 
         return new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
