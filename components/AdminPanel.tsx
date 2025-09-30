@@ -216,17 +216,25 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-3">Daftar Mata Kuliah</h3>
           <div className="space-y-4">
             {courses.map((course) => (
-              <div key={course.id} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                <input
-                  type="text"
-                  placeholder="Nama Mata Kuliah"
-                  value={course.name}
-                  onChange={(e) => handleCourseChange(course.id, 'name', e.target.value)}
-                  className="col-span-12 md:col-span-11 p-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md"
+              <div key={course.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                    <input
+                      type="text"
+                      placeholder="Nama Mata Kuliah"
+                      value={course.name}
+                      onChange={(e) => handleCourseChange(course.id, 'name', e.target.value)}
+                      className="col-span-12 md:col-span-11 p-2 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md"
+                    />
+                    <button onClick={() => removeCourse(course.id)} className="col-span-12 md:col-span-1 flex justify-center items-center text-red-500 hover:text-red-700 dark:hover:text-red-400 transition">
+                      <TrashIcon />
+                    </button>
+                </div>
+                <textarea
+                    placeholder="Catatan khusus untuk tugas mata kuliah ini..."
+                    value={course.assignmentNotes || ''}
+                    onChange={(e) => handleCourseChange(course.id, 'assignmentNotes', e.target.value)}
+                    className="w-full h-20 p-2 mt-2 text-sm bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-md"
                 />
-                <button onClick={() => removeCourse(course.id)} className="col-span-12 md:col-span-1 flex justify-center items-center text-red-500 hover:text-red-700 dark:hover:text-red-400 transition">
-                  <TrashIcon />
-                </button>
               </div>
             ))}
           </div>

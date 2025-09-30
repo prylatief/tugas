@@ -9,6 +9,7 @@ interface StudentViewProps {
 interface SearchResult {
   courseName: string;
   assignmentTitle: string;
+  assignmentNotes?: string;
   groupNumber: number;
   studentRole: string;
   groupMembers: Member[];
@@ -56,6 +57,7 @@ const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
           results.push({
             courseName: data.course.name,
             assignmentTitle: group.assignmentTitle,
+            assignmentNotes: data.course.assignmentNotes,
             groupNumber: groupIndex + 1,
             studentRole: foundMember.role,
             groupMembers: group.members,
@@ -104,6 +106,13 @@ const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
                   <h3 className="text-2xl font-bold text-primary-700 dark:text-primary-300">{result.courseName}</h3>
                   <p className="text-gray-500 dark:text-gray-400">"{result.assignmentTitle}"</p>
                 </div>
+
+                {result.assignmentNotes && (
+                    <div className="bg-blue-100 dark:bg-blue-900/50 border-l-4 border-blue-500 text-blue-800 dark:text-blue-300 p-4 rounded-md my-4" role="alert">
+                        <p className="font-bold">Catatan Tugas:</p>
+                        <p className="whitespace-pre-wrap text-sm">{result.assignmentNotes}</p>
+                    </div>
+                )}
                 
                 {result.presentationTime && (
                     <div className="bg-orange-100 dark:bg-orange-900/50 border-l-4 border-orange-500 text-orange-700 dark:text-orange-300 p-4 rounded-md mb-4" role="alert">

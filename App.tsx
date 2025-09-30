@@ -178,7 +178,7 @@ function App() {
   }, []);
   
   const addCourse = async () => {
-    const newCourse = { id: Date.now().toString(), name: '' };
+    const newCourse: Course = { id: Date.now().toString(), name: '', assignmentNotes: '' };
     
     // Add to DB
     const { error } = await supabase.from('course_groups').insert({

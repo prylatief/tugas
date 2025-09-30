@@ -46,7 +46,7 @@ const formatDisplayDate = (dateString?: string): string => {
 export const exportCourseToCSV = (generated: GeneratedGroup) => {
   if (!generated) return;
   const { course, groups } = generated;
-  const headers = ['Mata Kuliah', 'Judul Tugas', 'Tanggal Presentasi', 'No. Kelompok', 'Nama', 'Email', 'Role'];
+  const headers = ['Mata Kuliah', 'Judul Tugas', 'Catatan Tugas', 'Tanggal Presentasi', 'No. Kelompok', 'Nama', 'Email', 'Role'];
   let csvContent = headers.join(',') + '\r\n';
 
   groups.forEach((group, groupIndex) => {
@@ -54,6 +54,7 @@ export const exportCourseToCSV = (generated: GeneratedGroup) => {
       const row = [
         course.name,
         group.assignmentTitle,
+        course.assignmentNotes || '',
         formatDisplayDate(group.presentationTime),
         groupIndex + 1,
         member.student.name,
@@ -72,7 +73,7 @@ export const exportCourseToCSV = (generated: GeneratedGroup) => {
 export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
   if (!allGenerated || allGenerated.length === 0) return;
 
-  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Tanggal Presentasi', 'Kelompok', 'Role'];
+  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Catatan Tugas', 'Tanggal Presentasi', 'Kelompok', 'Role'];
   let csvContent = headers.join(',') + '\r\n';
 
   const studentMap = new Map<string, { student: any; assignments: any[] }>();
@@ -87,6 +88,7 @@ export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
         studentMap.get(studentKey)?.assignments.push({
           courseName: generated.course.name,
           assignmentTitle: group.assignmentTitle,
+          assignmentNotes: generated.course.assignmentNotes,
           presentationTime: group.presentationTime,
           groupNumber: groupIndex + 1,
           role: member.role,
@@ -102,6 +104,7 @@ export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
           student.email || '',
           assignment.courseName,
           assignment.assignmentTitle,
+          assignment.assignmentNotes || '',
           formatDisplayDate(assignment.presentationTime),
           assignment.groupNumber,
           assignment.role,
