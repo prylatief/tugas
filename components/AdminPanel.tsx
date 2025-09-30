@@ -285,7 +285,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                             className="w-full p-1.5 mb-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
                         />
                         <input
-                            type="datetime-local"
+                            type="date"
                             value={group.presentationTime || ''}
                             onChange={(e) => handleGroupPresentationTimeChange(data.course.id, data.groups, groupIndex, e.target.value)}
                             className="w-full p-1.5 mb-3 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"

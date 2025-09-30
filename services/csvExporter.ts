@@ -23,39 +23,30 @@ const escapeCsvCell = (cell: string | undefined): string => {
   return `"${str}"`;
 };
 
-const formatDisplayDate = (isoString?: string): string => {
-    if (!isoString) return '';
+const formatDisplayDate = (dateString?: string): string => {
+    if (!dateString) return '';
     try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString;
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
 
         const dateOptions: Intl.DateTimeFormatOptions = {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric',
-            timeZone: 'Asia/Jakarta'
-        };
-        const timeOptions: Intl.DateTimeFormatOptions = {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'Asia/Jakarta'
+            timeZone: 'UTC'
         };
 
-        const dateStr = new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
-        const timeStr = new Intl.DateTimeFormat('id-ID', timeOptions).format(date).replace(/\./g, ':');
-
-        return `${dateStr}, ${timeStr}`;
+        return new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
     } catch (e) {
-        return isoString;
+        return dateString;
     }
 };
 
 export const exportCourseToCSV = (generated: GeneratedGroup) => {
   if (!generated) return;
   const { course, groups } = generated;
-  const headers = ['Mata Kuliah', 'Judul Tugas', 'Waktu Presentasi', 'No. Kelompok', 'Nama', 'Email', 'Role'];
+  const headers = ['Mata Kuliah', 'Judul Tugas', 'Tanggal Presentasi', 'No. Kelompok', 'Nama', 'Email', 'Role'];
   let csvContent = headers.join(',') + '\r\n';
 
   groups.forEach((group, groupIndex) => {
@@ -81,7 +72,7 @@ export const exportCourseToCSV = (generated: GeneratedGroup) => {
 export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
   if (!allGenerated || allGenerated.length === 0) return;
 
-  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Waktu Presentasi', 'Kelompok', 'Role'];
+  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Tanggal Presentasi', 'Kelompok', 'Role'];
   let csvContent = headers.join(',') + '\r\n';
 
   const studentMap = new Map<string, { student: any; assignments: any[] }>();

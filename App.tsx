@@ -67,7 +67,8 @@ const parseStudents = (text: string): Student[] => {
         name: parts[0],
         email: parts[1] || undefined,
       };
-    });
+    })
+    .filter(student => student.name); // Filter out students with empty names
 };
 
 const useDebounce = (value: string, delay: number) => {

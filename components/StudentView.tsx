@@ -15,32 +15,22 @@ interface SearchResult {
   presentationTime?: string;
 }
 
-const formatDisplayDate = (isoString?: string): string => {
-    if (!isoString) return 'Belum diatur';
+const formatDisplayDate = (dateString?: string): string => {
+    if (!dateString) return 'Belum diatur';
     try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString; // Fallback ke string original jika tidak valid
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString; // Fallback
 
         const dateOptions: Intl.DateTimeFormatOptions = {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric',
-            timeZone: 'Asia/Jakarta' // Atur zona waktu jika perlu
+            timeZone: 'UTC' // Use UTC to prevent timezone shifts
         };
-        const timeOptions: Intl.DateTimeFormatOptions = {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false,
-            timeZone: 'Asia/Jakarta'
-        };
-
-        const dateStr = new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
-        const timeStr = new Intl.DateTimeFormat('id-ID', timeOptions).format(date).replace(/\./g, ':');
-
-        return `${dateStr}, ${timeStr}`;
+        return new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
     } catch (e) {
-        return isoString; // Fallback jika ada error
+        return dateString; // Fallback
     }
 };
 
@@ -117,7 +107,7 @@ const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
                 
                 {result.presentationTime && (
                     <div className="bg-orange-100 dark:bg-orange-900/50 border-l-4 border-orange-500 text-orange-700 dark:text-orange-300 p-4 rounded-md mb-4" role="alert">
-                        <p className="font-bold text-lg">Jadwal Presentasi</p>
+                        <p className="font-bold text-lg">Tanggal Presentasi</p>
                         <p className="text-2xl">{formatDisplayDate(result.presentationTime)}</p>
                     </div>
                 )}
