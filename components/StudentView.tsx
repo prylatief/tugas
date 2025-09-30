@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import type { GeneratedGroup, Member } from '../types';
 import { SearchIcon } from './Icons';
@@ -13,7 +12,38 @@ interface SearchResult {
   groupNumber: number;
   studentRole: string;
   groupMembers: Member[];
+  presentationTime?: string;
 }
+
+const formatDisplayDate = (isoString?: string): string => {
+    if (!isoString) return 'Belum diatur';
+    try {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString; // Fallback ke string original jika tidak valid
+
+        const dateOptions: Intl.DateTimeFormatOptions = {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'Asia/Jakarta' // Atur zona waktu jika perlu
+        };
+        const timeOptions: Intl.DateTimeFormatOptions = {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'Asia/Jakarta'
+        };
+
+        const dateStr = new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
+        const timeStr = new Intl.DateTimeFormat('id-ID', timeOptions).format(date).replace(/\./g, ':');
+
+        return `${dateStr}, ${timeStr}`;
+    } catch (e) {
+        return isoString; // Fallback jika ada error
+    }
+};
+
 
 const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,6 +69,7 @@ const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
             groupNumber: groupIndex + 1,
             studentRole: foundMember.role,
             groupMembers: group.members,
+            presentationTime: group.presentationTime,
           });
         }
       });
@@ -84,14 +115,21 @@ const StudentView: React.FC<StudentViewProps> = ({ generatedData }) => {
                   <p className="text-gray-500 dark:text-gray-400">"{result.assignmentTitle}"</p>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                {result.presentationTime && (
+                    <div className="bg-orange-100 dark:bg-orange-900/50 border-l-4 border-orange-500 text-orange-700 dark:text-orange-300 p-4 rounded-md mb-4" role="alert">
+                        <p className="font-bold text-lg">Jadwal Presentasi</p>
+                        <p className="text-2xl">{formatDisplayDate(result.presentationTime)}</p>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div>
                         <p className="text-sm text-gray-500">Kelompok</p>
-                        <p className="text-2xl font-bold">{result.groupNumber}</p>
+                        <p className="text-3xl font-bold">{result.groupNumber}</p>
                     </div>
                      <div>
                         <p className="text-sm text-gray-500">Bagian / Role Anda</p>
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">{result.studentRole}</p>
+                        <p className="text-3xl font-bold text-green-600 dark:text-green-400">{result.studentRole}</p>
                     </div>
                 </div>
 

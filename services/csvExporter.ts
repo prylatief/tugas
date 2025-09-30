@@ -1,4 +1,3 @@
-
 import type { GeneratedGroup } from '../types';
 
 const downloadCSV = (csvContent: string, filename: string) => {
@@ -24,10 +23,39 @@ const escapeCsvCell = (cell: string | undefined): string => {
   return `"${str}"`;
 };
 
+const formatDisplayDate = (isoString?: string): string => {
+    if (!isoString) return '';
+    try {
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString;
+
+        const dateOptions: Intl.DateTimeFormatOptions = {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'Asia/Jakarta'
+        };
+        const timeOptions: Intl.DateTimeFormatOptions = {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'Asia/Jakarta'
+        };
+
+        const dateStr = new Intl.DateTimeFormat('id-ID', dateOptions).format(date);
+        const timeStr = new Intl.DateTimeFormat('id-ID', timeOptions).format(date).replace(/\./g, ':');
+
+        return `${dateStr}, ${timeStr}`;
+    } catch (e) {
+        return isoString;
+    }
+};
+
 export const exportCourseToCSV = (generated: GeneratedGroup) => {
   if (!generated) return;
   const { course, groups } = generated;
-  const headers = ['Mata Kuliah', 'Judul Tugas', 'No. Kelompok', 'Nama', 'Email', 'Role'];
+  const headers = ['Mata Kuliah', 'Judul Tugas', 'Waktu Presentasi', 'No. Kelompok', 'Nama', 'Email', 'Role'];
   let csvContent = headers.join(',') + '\r\n';
 
   groups.forEach((group, groupIndex) => {
@@ -35,6 +63,7 @@ export const exportCourseToCSV = (generated: GeneratedGroup) => {
       const row = [
         course.name,
         group.assignmentTitle,
+        formatDisplayDate(group.presentationTime),
         groupIndex + 1,
         member.student.name,
         member.student.email || '',
@@ -52,7 +81,7 @@ export const exportCourseToCSV = (generated: GeneratedGroup) => {
 export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
   if (!allGenerated || allGenerated.length === 0) return;
 
-  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Kelompok', 'Role'];
+  const headers = ['Nama', 'Email', 'Mata Kuliah', 'Judul Tugas', 'Waktu Presentasi', 'Kelompok', 'Role'];
   let csvContent = headers.join(',') + '\r\n';
 
   const studentMap = new Map<string, { student: any; assignments: any[] }>();
@@ -67,6 +96,7 @@ export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
         studentMap.get(studentKey)?.assignments.push({
           courseName: generated.course.name,
           assignmentTitle: group.assignmentTitle,
+          presentationTime: group.presentationTime,
           groupNumber: groupIndex + 1,
           role: member.role,
         });
@@ -81,6 +111,7 @@ export const exportAllToCSV = (allGenerated: GeneratedGroup[]) => {
           student.email || '',
           assignment.courseName,
           assignment.assignmentTitle,
+          formatDisplayDate(assignment.presentationTime),
           assignment.groupNumber,
           assignment.role,
        ].map(escapeCsvCell);

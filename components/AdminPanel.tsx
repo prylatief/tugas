@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Student, Course, GeneratedGroup, Member, Group } from '../types';
-import { PlusIcon, TrashIcon, ResetIcon, DownloadIcon, LogoutIcon } from './Icons';
+import { PlusIcon, TrashIcon, ResetIcon, DownloadIcon, LogoutIcon, SortIcon } from './Icons';
 import { exportCourseToCSV, exportAllToCSV } from '../services/csvExporter';
 
 interface AdminPanelProps {
@@ -21,23 +21,37 @@ const MemberAdder: React.FC<{
     courseId: string;
     groupIndex: number;
     students: Student[];
+    assignedStudentNames: Set<string>;
     groups: Group[];
     updateGeneratedData: (courseId: string, updatedGroups: Group[]) => Promise<void>;
-}> = ({ courseId, groupIndex, students, groups, updateGeneratedData }) => {
+}> = ({ courseId, groupIndex, students, assignedStudentNames, groups, updateGeneratedData }) => {
     const [selectedStudentName, setSelectedStudentName] = useState('');
 
     const addMember = async () => {
-        if (!selectedStudentName) return;
+        if (!selectedStudentName) {
+            alert("Silakan pilih anggota untuk ditambahkan.");
+            return;
+        }
+
         const studentToAdd = students.find(s => s.name === selectedStudentName);
-        if (!studentToAdd) return;
+
+        if (!studentToAdd || assignedStudentNames.has(studentToAdd.name)) {
+            alert("Mahasiswa ini sudah ada di kelompok lain atau tidak valid.");
+            setSelectedStudentName(''); // Reset selection on error
+            return;
+        }
 
         const updatedGroups = [...groups];
         const newMember: Member = { student: studentToAdd, role: 'Anggota' };
         updatedGroups[groupIndex].members.push(newMember);
 
         await updateGeneratedData(courseId, updatedGroups);
-        setSelectedStudentName('');
+        setSelectedStudentName(''); // Reset selection after adding
     };
+
+    // Partition students into available and already assigned for better UX
+    const availableStudents = students.filter(s => !assignedStudentNames.has(s.name));
+    const assignedStudents = students.filter(s => assignedStudentNames.has(s.name));
 
     return (
         <div className="flex gap-2 mt-2">
@@ -47,11 +61,31 @@ const MemberAdder: React.FC<{
                 className="flex-grow p-1 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
             >
                 <option value="">-- Pilih Anggota --</option>
-                {students.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                
+                {availableStudents.length > 0 && (
+                    <optgroup label="Tersedia">
+                        {availableStudents.map(student => (
+                            <option key={student.name} value={student.name}>
+                                {student.name}
+                            </option>
+                        ))}
+                    </optgroup>
+                )}
+                
+                {assignedStudents.length > 0 && (
+                    <optgroup label="Sudah Ditugaskan">
+                        {assignedStudents.map(student => (
+                            <option key={student.name} value={student.name} disabled>
+                                {student.name}
+                            </option>
+                        ))}
+                    </optgroup>
+                )}
             </select>
             <button
                 onClick={addMember}
-                className="px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition"
+                disabled={!selectedStudentName}
+                className="px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
                 Tambah
             </button>
@@ -99,8 +133,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       updateGeneratedData(courseId, updatedGroups);
   };
 
+  const handleGroupPresentationTimeChange = (courseId: string, groups: Group[], groupIndex: number, newTime: string) => {
+      const updatedGroups = groups.map((group, gIdx) =>
+          gIdx !== groupIndex
+            ? group
+            : { ...group, presentationTime: newTime }
+      );
+      updateGeneratedData(courseId, updatedGroups);
+  };
+
   const addGroup = (courseId: string, groups: Group[]) => {
-    const newGroup: Group = { id: Date.now().toString(), assignmentTitle: '', members: [] };
+    const newGroup: Group = { id: Date.now().toString(), assignmentTitle: '', presentationTime: '', members: [] };
     const updatedGroups = [...groups, newGroup];
     updateGeneratedData(courseId, updatedGroups);
   };
@@ -116,6 +159,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
        updatedGroups[groupIndex].members.splice(memberIndex, 1);
        updateGeneratedData(courseId, updatedGroups);
   }
+
+  const parsePresentationTime = (timeStr: string | undefined): Date | null => {
+    if (!timeStr) return null;
+    const date = new Date(timeStr);
+    return isNaN(date.getTime()) ? null : date;
+  };
+
+  const handleSortGroups = (courseId: string, groups: Group[]) => {
+      const sortedGroups = [...groups].sort((a, b) => {
+          const timeA = parsePresentationTime(a.presentationTime);
+          const timeB = parsePresentationTime(b.presentationTime);
+
+          if (!timeA && !timeB) return 0;
+          if (!timeA) return 1; // Groups without a valid time go to the end
+          if (!timeB) return -1;
+
+          return timeA.getTime() - timeB.getTime();
+      });
+      updateGeneratedData(courseId, sortedGroups);
+  };
 
 
   return (
@@ -191,15 +254,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                 if (!courses.find(c => c.id === data.course.id)) return null;
 
                 const assignedStudentNames = new Set(data.groups.flatMap(g => g.members).map(m => m.student.name));
-                const availableStudents = students.filter(s => !assignedStudentNames.has(s.name));
-
+                
                 return (
                 <div key={data.course.id} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
                   <div className="flex justify-between items-center mb-3">
                       <h4 className="text-xl font-semibold">{data.course.name}</h4>
-                      <button onClick={() => addGroup(data.course.id, data.groups)} className="flex items-center px-3 py-1 bg-gray-200 dark:bg-gray-600 text-sm rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">
-                          <PlusIcon/> Kelompok
-                      </button>
+                      <div className="flex items-center gap-2">
+                          <button onClick={() => handleSortGroups(data.course.id, data.groups)} className="flex items-center px-3 py-1 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-sm rounded-md hover:bg-indigo-200 dark:hover:bg-indigo-900 transition">
+                              <SortIcon /> Urutkan
+                          </button>
+                          <button onClick={() => addGroup(data.course.id, data.groups)} className="flex items-center px-3 py-1 bg-gray-200 dark:bg-gray-600 text-sm rounded-md hover:bg-gray-300 dark:hover:bg-gray-500 transition">
+                              <PlusIcon/> Kelompok
+                          </button>
+                      </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {data.groups.map((group, groupIndex) => (
@@ -215,6 +282,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                             placeholder="Judul Tugas Kelompok"
                             value={group.assignmentTitle}
                             onChange={(e) => handleGroupTitleChange(data.course.id, data.groups, groupIndex, e.target.value)}
+                            className="w-full p-1.5 mb-2 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
+                        />
+                        <input
+                            type="datetime-local"
+                            value={group.presentationTime || ''}
+                            onChange={(e) => handleGroupPresentationTimeChange(data.course.id, data.groups, groupIndex, e.target.value)}
                             className="w-full p-1.5 mb-3 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md"
                         />
                         <ul className="space-y-2 mb-3">
@@ -233,7 +306,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                             </li>
                           ))}
                         </ul>
-                        <MemberAdder courseId={data.course.id} groupIndex={groupIndex} students={availableStudents} groups={data.groups} updateGeneratedData={updateGeneratedData} />
+                        <MemberAdder 
+                            courseId={data.course.id} 
+                            groupIndex={groupIndex} 
+                            students={students} 
+                            assignedStudentNames={assignedStudentNames}
+                            groups={data.groups} 
+                            updateGeneratedData={updateGeneratedData} 
+                        />
                       </div>
                     ))}
                   </div>

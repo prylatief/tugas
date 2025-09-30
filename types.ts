@@ -17,6 +17,7 @@ export interface Member {
 export interface Group {
   id: string;
   assignmentTitle: string;
+  presentationTime?: string;
   members: Member[];
 }
 
