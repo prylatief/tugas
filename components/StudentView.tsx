@@ -22,6 +22,7 @@ interface UpcomingPresentation {
     assignmentTitle: string;
     groupNumber: number;
     groupMembers: Member[];
+    assignmentNotes?: string;
 }
 
 const formatDisplayDate = (dateString?: string): string => {
@@ -99,6 +100,7 @@ const UpcomingPresentations: React.FC<{ generatedData: GeneratedGroup[] }> = ({ 
                             assignmentTitle: group.assignmentTitle,
                             groupNumber: index + 1,
                             groupMembers: group.members,
+                            assignmentNotes: courseData.course.assignmentNotes,
                         });
                     }
                 }
@@ -164,6 +166,14 @@ const UpcomingPresentations: React.FC<{ generatedData: GeneratedGroup[] }> = ({ 
                                         <div key={`${p.courseName}-${p.groupNumber}-${index}`} className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow">
                                              <p className="font-semibold">{p.courseName} - Kelompok {p.groupNumber}</p>
                                              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">"{p.assignmentTitle}"</p>
+                                             
+                                             {p.assignmentNotes && (
+                                                <div className="bg-blue-100 dark:bg-blue-900/50 border-l-4 border-blue-500 text-blue-800 dark:text-blue-300 p-2 my-2 rounded-md text-sm" role="alert">
+                                                    <p className="font-bold">Catatan:</p>
+                                                    <p className="whitespace-pre-wrap">{p.assignmentNotes}</p>
+                                                </div>
+                                             )}
+
                                              <ul className="text-sm list-disc list-inside text-gray-600 dark:text-gray-300">
                                                 {p.groupMembers.map(m => <li key={m.student.name}>{m.student.name}</li>)}
                                              </ul>
